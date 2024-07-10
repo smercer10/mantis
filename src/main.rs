@@ -2,9 +2,9 @@ use nix::{
     sys::ptrace,
     unistd::{fork, ForkResult},
 };
-use std::{env, os::unix::process::CommandExt, process::Command};
+use std::{env, error::Error, os::unix::process::CommandExt, process::Command};
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
@@ -12,24 +12,18 @@ fn main() {
         std::process::exit(1);
     }
 
-    match unsafe { fork() } {
-        Ok(ForkResult::Parent { child }) => {
+    let debuggee = &args[1];
+    let debuggee_args = &args[2..];
+
+    match unsafe { fork()? } {
+        ForkResult::Parent { child } => {
             println!("Debugger started. Child PID: {}", child);
+            Ok(())
         }
-        Ok(ForkResult::Child) => {
-            if let Err(err) = ptrace::traceme() {
-                eprintln!("Failed to trace child process: {}", err);
-                std::process::exit(1);
-            }
-
-            Command::new(&args[1]).args(&args[2..]).exec();
-
-            // This line should never be reached if the exec call is successful.
-            eprintln!("Failed to execute the target application.");
-        }
-        Err(_) => {
-            eprintln!("Failed to fork the process.");
-            std::process::exit(1);
+        ForkResult::Child => {
+            ptrace::traceme()?;
+            Command::new(debuggee).args(debuggee_args).exec();
+            Ok(())
         }
     }
 }
