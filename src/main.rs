@@ -4,6 +4,8 @@ use nix::{
 };
 use std::{env, error::Error, os::unix::process::CommandExt, process::Command};
 
+mod debugger;
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
 
@@ -17,7 +19,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match unsafe { fork()? } {
         ForkResult::Parent { child } => {
-            println!("Debugger started. Child PID: {}", child);
+            let mut debugger = debugger::Debugger::new(child);
+            debugger.run()?;
             Ok(())
         }
         ForkResult::Child => {
