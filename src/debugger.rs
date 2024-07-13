@@ -1,3 +1,4 @@
+use crate::debugger::breakpoint::Breakpoint;
 use nix::{
     sys::{
         ptrace,
@@ -10,13 +11,19 @@ use std::{
     io::{self, Write},
 };
 
+mod breakpoint;
+
 pub struct Debugger {
     pid: Pid,
+    breakpoints: Vec<Breakpoint>,
 }
 
 impl Debugger {
     pub fn new(pid: Pid) -> Self {
-        Self { pid }
+        Self {
+            pid,
+            breakpoints: Vec::new(),
+        }
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
@@ -61,8 +68,9 @@ impl Debugger {
                     println!("Usage: break <address>");
                     return Ok(());
                 }
-                // TODO: Implement breakpoint setting
-                println!("Breakpoint setting not implemented yet.");
+
+                let address = usize::from_str_radix(args[1], 16)?;
+                self.set_breakpoint(address)?;
             }
             _ => println!("Unknown command."),
         }
@@ -72,8 +80,15 @@ impl Debugger {
 
     fn continue_execution(&mut self) -> Result<(), Box<dyn Error>> {
         ptrace::cont(self.pid, None)?;
-
         waitpid(self.pid, None)?;
+        Ok(())
+    }
+
+    fn set_breakpoint(&mut self, address: usize) -> Result<(), Box<dyn Error>> {
+        let mut breakpoint = Breakpoint::new(self.pid, address);
+        breakpoint.enable()?;
+        println!("Breakpoint set at address 0x{:x}.", address);
+        self.breakpoints.push(breakpoint);
         Ok(())
     }
 }
